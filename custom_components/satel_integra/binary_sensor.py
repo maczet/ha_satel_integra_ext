@@ -235,86 +235,95 @@ class SatelIntegraBinarySensor(SatelIntegraEntity, BinarySensorEntity):
         self._react_to_signal = react_to_signal
 
     async def async_added_to_hass(self) -> None:
-        # _LOGGER.debug("_react_to_signals:",self._react_to_signal )
-            
+        """Initialize state and register callbacks."""
+        
+        # Safely read initial state
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.violated_outputs )
-            if self._device_number in self._satel.violated_outputs:
+            outputs = getattr(self._satel, "violated_outputs", None)
+            if outputs is not None and self._device_number in outputs:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_VIOLATED_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.violated_outputs )
-            if self._device_number in self._satel.violated_zones:
+            zones = getattr(self._satel, "violated_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_ALARM_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.alarm_zones )
-            
-            if self._device_number in self._satel.alarm_zones:
+            zones = getattr(self._satel, "alarm_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_MEM_ALARM_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.mem_alarm_zones )
-            
-            if self._device_number in self._satel.mem_alarm_zones:
+            zones = getattr(self._satel, "mem_alarm_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_TAMPER_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.tamper_zones )
-            
-            if self._device_number in self._satel.tamper_zones:
+            zones = getattr(self._satel, "tamper_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_MEM_TAMPER_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.mem_tamper_zones )
-            
-            if self._device_number in self._satel.mem_tamper_zones:
+            zones = getattr(self._satel, "mem_tamper_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.bypass_zones )
-            
-            if self._device_number in self._satel.bypass_zones:
+            zones = getattr(self._satel, "bypass_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_MASKED_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.masked_zones )
-            
-            if self._device_number in self._satel.masked_zones:
+            zones = getattr(self._satel, "masked_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_MEM_MASKED_UPDATED:
-        #    _LOGGER.debug(" _react_to_signal %s, device_number:%s ,status %s, array:%s", self._react_to_signal,self._device_number, self._state,self._satel.mem_masked_zones )
-            
-            if self._device_number in self._satel.mem_masked_zones:
+            zones = getattr(self._satel, "mem_masked_zones", None)
+            if zones is not None and self._device_number in zones:
                 self._state = 1
             else:
                 self._state = 0
+                
         elif self._react_to_signal == SIGNAL_TROUBLE_UPDATED:
-            if self._device_number in self._satel.trouble:
+            trouble = getattr(self._satel, "trouble", None)
+            if trouble is not None and self._device_number in trouble:
                 self._state = 1
             else:
                 self._state = 0
-            #_LOGGER.debug(" _react_to_signal %s, device_number:%s, _state:%s , device_name:%s, array:%s", self._react_to_signal,self._device_number,self._state, self._device_name,self._satel.trouble )
+                
         elif self._react_to_signal == SIGNAL_TROUBLE2_UPDATED:
-            if self._device_number in self._satel.trouble2:
+            trouble2 = getattr(self._satel, "trouble2", None)
+            if trouble2 is not None and self._device_number in trouble2:
                 self._state = 1
             else:
                 self._state = 0
-            #_LOGGER.debug(" _react_to_signal %s, device_number:%s, _state:%s , device_name:%s, array:%s", self._react_to_signal,self._device_number,self._state, self._device_name,self._satel.trouble2 )
+
+        # Register dispatcher callback
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, self._react_to_signal, self._devices_updated
             )
         )
+
+        # Write initial state to HA
+        self.async_write_ha_state()
 
     @property
     def icon(self):
@@ -335,6 +344,7 @@ class SatelIntegraBinarySensor(SatelIntegraEntity, BinarySensorEntity):
     @callback
     def _devices_updated(self, zones):
         """Update the zone's state, if needed."""
-        if self._device_number in zones and self._state != zones[self._device_number]:
-            self._state = zones[self._device_number]
+        new_state = zones.get(self._device_number, 0)
+        if self._state != new_state:
+            self._state = new_state
             self.async_write_ha_state()

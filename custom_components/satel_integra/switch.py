@@ -78,72 +78,100 @@ class SatelIntegraSwitch(SatelIntegraEntity, SwitchEntity):
         self._device_type = device_type
         self._react_to_signal = react_to_signal
 
-
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-            async_dispatcher_connect(
-                self.hass, SIGNAL_OUTPUTS_UPDATED, self._devices_updated
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass, SIGNAL_OUTPUTS_UPDATED, self._devices_updated
+                )
             )
-        
+
         if self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-            async_dispatcher_connect(
-                self.hass, SIGNAL_BYPASS_UPDATED, self._devices_updated_bypass
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass, SIGNAL_BYPASS_UPDATED, self._devices_updated_bypass
+                )
             )
+
+        initial_state = self._read_state()
+        if initial_state is not None:
+            self._state = initial_state
+            self.async_write_ha_state()
 
     @callback
     def _devices_updated(self, zones):
         """Update switch state, if needed."""
-        if self._device_number in zones:
-            new_state = self._read_state()
-            if new_state != self._state:
-                self._state = new_state
-                self.async_write_ha_state()
-            _LOGGER.debug("SWITCH UPDATE STATUS name: %s, number:%s, old_state:%s, new_state:%s zones: %s", self._name,self._device_number,self._state,new_state, zones)
+        new_state = bool(zones.get(self._device_number, 0))
+        if new_state != self._state:
+            self._state = new_state
+            self.async_write_ha_state()
+        _LOGGER.debug(
+            "SWITCH UPDATE STATUS name: %s, number:%s, old_state:%s, new_state:%s zones: %s",
+            self._name, self._device_number, self._state, new_state, zones
+        )
+
     @callback
     def _devices_updated_bypass(self, zones):
         """Update switch state, if needed."""
-        if self._device_number in zones:
-            new_state = self._read_state()
-            
-            if new_state != self._state:
-                self._state = new_state
-                self.async_write_ha_state()
-            _LOGGER.debug("BYPASS SWITCH UPDATE STATUS name: %s, number:%s, old_state:%s, new_state:%s zones: %s", self._name,self._device_number,self._state,new_state, zones)
-    
+        new_state = bool(zones.get(self._device_number, 0))
+        if new_state != self._state:
+            self._state = new_state
+            self.async_write_ha_state()
+        _LOGGER.debug(
+            "BYPASS SWITCH UPDATE STATUS name: %s, number:%s, old_state:%s, new_state:%s zones: %s",
+            self._name, self._device_number, self._state, new_state, zones
+        )
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the device on."""
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-            _LOGGER.debug("COMMAND SWITCH ON %s: name: %s  number %s: type:%s status: %s, turning ON",self._react_to_signal, self._name,self._device_number, self._device_type, self._state)
-        
+            _LOGGER.debug(
+                "COMMAND SWITCH ON %s: name: %s  number %s: type:%s status: %s, turning ON",
+                self._react_to_signal, self._name, self._device_number, self._device_type, self._state
+            )
             await self._satel.set_output(self._code, self._device_number, True)
             self.async_write_ha_state()
         if self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-            _LOGGER.debug("COMMAND ZONE BYPASS %s: name: %s  number %s: type:%s status: %s, turning ON",self._react_to_signal, self._name,self._device_number, self._device_type, self._state)
+            _LOGGER.debug(
+                "COMMAND ZONE BYPASS %s: name: %s  number %s: type:%s status: %s, turning ON",
+                self._react_to_signal, self._name, self._device_number, self._device_type, self._state
+            )
             await self._satel.set_bypass(self._code, self._device_number, True)
             self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-            _LOGGER.debug("COMMAND SWITCH OFF %s: name: %s  number %s: type:%s status: %s, turning OFF",self._react_to_signal, self._name,self._device_number, self._device_type, self._state)
+            _LOGGER.debug(
+                "COMMAND SWITCH OFF %s: name: %s  number %s: type:%s status: %s, turning OFF",
+                self._react_to_signal, self._name, self._device_number, self._device_type, self._state
+            )
             await self._satel.set_output(self._code, self._device_number, False)
             self.async_write_ha_state()
         if self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-            _LOGGER.debug("COMMAND ZONE UN-BYPASS %s: name: %s  number %s: type:%s status: %s, turning OFF",self._react_to_signal, self._name,self._device_number, self._device_type, self._state)
-        
+            _LOGGER.debug(
+                "COMMAND ZONE UN-BYPASS %s: name: %s  number %s: type:%s status: %s, turning OFF",
+                self._react_to_signal, self._name, self._device_number, self._device_type, self._state
+            )
             await self._satel.set_bypass(self._code, self._device_number, False)
             self.async_write_ha_state()
 
     @property
     def is_on(self):
         """Return true if device is on."""
-        self._state = self._read_state()
         return self._state
 
     def _read_state(self):
         """Read state of the device."""
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-            return self._device_number in self._satel.violated_outputs
+            outputs = getattr(self._satel, "violated_outputs", None)
+            if outputs is None:
+                return None
+            return self._device_number in outputs
         if self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-            return self._device_number in self._satel.bypass_zones
+            bypass = getattr(self._satel, "bypass_zones", None)
+            if bypass is None:
+                return None
+            return self._device_number in bypass
+        return None
