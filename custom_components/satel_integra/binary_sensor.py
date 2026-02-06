@@ -1,6 +1,7 @@
 """Support for Satel Integra zone states- represented as binary sensors."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -237,83 +238,35 @@ class SatelIntegraBinarySensor(SatelIntegraEntity, BinarySensorEntity):
     async def async_added_to_hass(self) -> None:
         """Initialize state and register callbacks."""
         
-        # Safely read initial state
-        if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
-            outputs = getattr(self._satel, "violated_outputs", None)
-            if outputs is not None and self._device_number in outputs:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_VIOLATED_UPDATED:
-            zones = getattr(self._satel, "violated_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_ALARM_UPDATED:
-            zones = getattr(self._satel, "alarm_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_MEM_ALARM_UPDATED:
-            zones = getattr(self._satel, "mem_alarm_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_TAMPER_UPDATED:
-            zones = getattr(self._satel, "tamper_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_MEM_TAMPER_UPDATED:
-            zones = getattr(self._satel, "mem_tamper_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_BYPASS_UPDATED:
-            zones = getattr(self._satel, "bypass_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_MASKED_UPDATED:
-            zones = getattr(self._satel, "masked_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_MEM_MASKED_UPDATED:
-            zones = getattr(self._satel, "mem_masked_zones", None)
-            if zones is not None and self._device_number in zones:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_TROUBLE_UPDATED:
-            trouble = getattr(self._satel, "trouble", None)
-            if trouble is not None and self._device_number in trouble:
-                self._state = 1
-            else:
-                self._state = 0
-                
-        elif self._react_to_signal == SIGNAL_TROUBLE2_UPDATED:
-            trouble2 = getattr(self._satel, "trouble2", None)
-            if trouble2 is not None and self._device_number in trouble2:
-                self._state = 1
-            else:
-                self._state = 0
+        # Force controller to update status for this entity type
+        _LOGGER.debug(
+            "Binary sensor %s (%s) requesting initial state. Signal: %s",
+            self._device_name,
+            self._device_number,
+            self._react_to_signal
+        )
+        
+        # Request fresh data from the alarm system
+        try:
+            await self._request_initial_state()
+        except Exception as ex:
+            _LOGGER.error(
+                "Failed to request initial state for %s (%s): %s",
+                self._device_name,
+                self._device_number,
+                ex
+            )
+        
+        # Read initial state after requesting it
+        initial_state = await self._read_initial_state()
+        self._state = initial_state
+        
+        _LOGGER.debug(
+            "Binary sensor %s (%s) initial state: %s",
+            self._device_name,
+            self._device_number,
+            initial_state
+        )
 
         # Register dispatcher callback
         self.async_on_remove(
@@ -324,6 +277,95 @@ class SatelIntegraBinarySensor(SatelIntegraEntity, BinarySensorEntity):
 
         # Write initial state to HA
         self.async_write_ha_state()
+
+    async def _request_initial_state(self):
+        """Request initial state from the alarm system."""
+        # Map signals to controller request methods
+        if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
+            if hasattr(self._satel, 'read_output'):
+                await self._satel.read_output()
+        elif self._react_to_signal == SIGNAL_VIOLATED_UPDATED:
+            if hasattr(self._satel, 'read_zone_violation'):
+                await self._satel.read_zone_violation()
+        elif self._react_to_signal == SIGNAL_ALARM_UPDATED:
+            if hasattr(self._satel, 'read_zone_alarm'):
+                await self._satel.read_zone_alarm()
+        elif self._react_to_signal == SIGNAL_MEM_ALARM_UPDATED:
+            if hasattr(self._satel, 'read_zone_alarm_memory'):
+                await self._satel.read_zone_alarm_memory()
+        elif self._react_to_signal == SIGNAL_TAMPER_UPDATED:
+            if hasattr(self._satel, 'read_zone_tamper'):
+                await self._satel.read_zone_tamper()
+        elif self._react_to_signal == SIGNAL_MEM_TAMPER_UPDATED:
+            if hasattr(self._satel, 'read_zone_tamper_memory'):
+                await self._satel.read_zone_tamper_memory()
+        elif self._react_to_signal == SIGNAL_BYPASS_UPDATED:
+            if hasattr(self._satel, 'read_zone_bypass'):
+                await self._satel.read_zone_bypass()
+        elif self._react_to_signal == SIGNAL_MASKED_UPDATED:
+            if hasattr(self._satel, 'read_zone_isolate'):
+                await self._satel.read_zone_isolate()
+        elif self._react_to_signal == SIGNAL_MEM_MASKED_UPDATED:
+            if hasattr(self._satel, 'read_zone_isolate_memory'):
+                await self._satel.read_zone_isolate_memory()
+        elif self._react_to_signal == SIGNAL_TROUBLE_UPDATED:
+            if hasattr(self._satel, 'read_troubles'):
+                await self._satel.read_troubles()
+        elif self._react_to_signal == SIGNAL_TROUBLE2_UPDATED:
+            if hasattr(self._satel, 'read_troubles_memory'):
+                await self._satel.read_troubles_memory()
+        
+        # Give the system a moment to process the request
+        await asyncio.sleep(0.1)
+
+    async def _read_initial_state(self):
+        """Read initial state from controller after requesting it."""
+        if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
+            outputs = getattr(self._satel, "violated_outputs", None)
+            if outputs is not None and self._device_number in outputs:
+                return 1
+        elif self._react_to_signal == SIGNAL_VIOLATED_UPDATED:
+            zones = getattr(self._satel, "violated_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_ALARM_UPDATED:
+            zones = getattr(self._satel, "alarm_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_MEM_ALARM_UPDATED:
+            zones = getattr(self._satel, "mem_alarm_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_TAMPER_UPDATED:
+            zones = getattr(self._satel, "tamper_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_MEM_TAMPER_UPDATED:
+            zones = getattr(self._satel, "mem_tamper_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_BYPASS_UPDATED:
+            zones = getattr(self._satel, "bypass_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_MASKED_UPDATED:
+            zones = getattr(self._satel, "masked_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_MEM_MASKED_UPDATED:
+            zones = getattr(self._satel, "mem_masked_zones", None)
+            if zones is not None and self._device_number in zones:
+                return 1
+        elif self._react_to_signal == SIGNAL_TROUBLE_UPDATED:
+            trouble = getattr(self._satel, "trouble", None)
+            if trouble is not None and self._device_number in trouble:
+                return 1
+        elif self._react_to_signal == SIGNAL_TROUBLE2_UPDATED:
+            trouble2 = getattr(self._satel, "trouble2", None)
+            if trouble2 is not None and self._device_number in trouble2:
+                return 1
+        
+        return 0
 
     @property
     def icon(self):

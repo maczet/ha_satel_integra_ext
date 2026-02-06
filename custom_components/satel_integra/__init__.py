@@ -1,5 +1,6 @@
 """Support for Satel Integra devices."""
 import collections
+import asyncio
 
 from satel_integra2.satel_integra import AsyncSatel
 import voluptuous as vol
@@ -149,6 +150,38 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     if not result:
         return False
+
+    # Request initial status for all configured entities
+    _LOGGER.info("Requesting initial status from alarm system...")
+    try:
+        if hasattr(controller, 'read_zone_violation'):
+            await controller.read_zone_violation()
+        if hasattr(controller, 'read_zone_alarm'):
+            await controller.read_zone_alarm()
+        if hasattr(controller, 'read_zone_alarm_memory'):
+            await controller.read_zone_alarm_memory()
+        if hasattr(controller, 'read_zone_tamper'):
+            await controller.read_zone_tamper()
+        if hasattr(controller, 'read_zone_tamper_memory'):
+            await controller.read_zone_tamper_memory()
+        if hasattr(controller, 'read_zone_bypass'):
+            await controller.read_zone_bypass()
+        if hasattr(controller, 'read_zone_isolate'):
+            await controller.read_zone_isolate()
+        if hasattr(controller, 'read_zone_isolate_memory'):
+            await controller.read_zone_isolate_memory()
+        if hasattr(controller, 'read_output'):
+            await controller.read_output()
+        if hasattr(controller, 'read_troubles'):
+            await controller.read_troubles()
+        if hasattr(controller, 'read_troubles_memory'):
+            await controller.read_troubles_memory()
+        
+        # Wait for responses to be processed
+        await asyncio.sleep(1)
+        _LOGGER.info("Initial status received from alarm system")
+    except Exception as ex:
+        _LOGGER.error("Failed to request initial status: %s", ex)
 
     @callback
     def _close(*_):

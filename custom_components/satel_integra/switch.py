@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import asyncio
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant, callback
@@ -80,6 +81,25 @@ class SatelIntegraSwitch(SatelIntegraEntity, SwitchEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
+        
+        _LOGGER.debug(
+            "Switch %s (%s) requesting initial state. Signal: %s",
+            self._name,
+            self._device_number,
+            self._react_to_signal
+        )
+        
+        # Request fresh data from the alarm system
+        try:
+            await self._request_initial_state()
+        except Exception as ex:
+            _LOGGER.error(
+                "Failed to request initial state for switch %s: %s",
+                self._name,
+                ex
+            )
+        
+        # Register dispatcher callbacks
         if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -94,10 +114,31 @@ class SatelIntegraSwitch(SatelIntegraEntity, SwitchEntity):
                 )
             )
 
+        # Try to read initial state
         initial_state = self._read_state()
+        
+        _LOGGER.debug(
+            "Switch %s (%s) initial_state: %s",
+            self._name,
+            self._device_number,
+            initial_state
+        )
+        
         if initial_state is not None:
             self._state = initial_state
             self.async_write_ha_state()
+
+    async def _request_initial_state(self):
+        """Request initial state from the alarm system."""
+        if self._react_to_signal == SIGNAL_OUTPUTS_UPDATED:
+            if hasattr(self._satel, 'read_output'):
+                await self._satel.read_output()
+        elif self._react_to_signal == SIGNAL_BYPASS_UPDATED:
+            if hasattr(self._satel, 'read_zone_bypass'):
+                await self._satel.read_zone_bypass()
+        
+        # Give the system a moment to process the request
+        await asyncio.sleep(0.1)
 
     @callback
     def _devices_updated(self, zones):
